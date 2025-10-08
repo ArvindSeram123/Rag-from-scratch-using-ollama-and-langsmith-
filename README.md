@@ -1,4 +1,3 @@
-﻿# Rag-from-scratch-using-ollama-and-langsmith-
 
 # 🧠 LangChain + Ollama + Chroma | RAG Example
 
@@ -107,5 +106,6 @@ rag_context = "\n".join([d.page_content for d in docs_context])
 
 # Generate final answer
 print(chain.invoke({"question": query, "context": rag_context}))
+
 
 
