@@ -1,152 +1,111 @@
 ﻿# Rag-from-scratch-using-ollama-and-langsmith-
 
-🔹 Imports — bringing in the necessary tools
+# 🧠 LangChain + Ollama + Chroma | RAG Example
+
+This project demonstrates a simple **Retrieval-Augmented Generation (RAG)** pipeline using  
+**LangChain**, **Ollama**, **Chroma**, and **SentenceTransformers**.  
+It allows a local LLM to answer questions **based only on your documents**.
+
+---
+
+## 🚀 Overview
+
+1. Load a text (e.g., a speech or document)
+2. Split it into smaller chunks
+3. Convert chunks into embeddings
+4. Store embeddings in a Chroma vector database
+5. Retrieve relevant chunks based on a query
+6. Pass retrieved context + question to an Ollama LLM
+7. Generate an accurate, context-aware response
+
+---
+
+## 🧩 Code
+
+```python
 from langchain_ollama import ChatOllama
-
-
-✅ Imports ChatOllama, a wrapper to connect LangChain with Ollama — a local LLM engine that runs models on your machine (like llama2, mistral, or gpt-oss).
-
 from langchain_community.vectorstores import Chroma
-
-
-✅ Imports Chroma, an open-source vector database used to store and retrieve text embeddings.
-It helps in semantic search — finding chunks of text similar in meaning to your query.
-
 from langchain_community.embeddings import SentenceTransformerEmbeddings
-
-
-✅ Imports an embedding model from SentenceTransformers (based on models like all-MiniLM-L6-v2)
-→ This converts text chunks into numerical vectors that represent meaning.
-
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-
-
-✅ Imports a text splitter that divides long text into manageable chunks (important because models have context limits).
-“Recursive” means it tries to split nicely by paragraphs, sentences, etc.
-
 from langchain_core.prompts import ChatPromptTemplate
-
-
-✅ Defines the prompt template used to talk to the LLM (the instruction + context + question).
-
 from langchain_core.output_parsers import StrOutputParser
-
-
-✅ Used to parse (cleanly extract) the raw text output from the model.
-Here it just ensures the model’s answer comes out as a plain string.
-
 from langchain_core.documents import Document
 
-
-✅ LangChain’s Document class — wraps each piece of text (with metadata).
-Useful for managing text chunks inside retrieval pipelines.
-
-🔹 Step 1: Load your text
+# -----------------------------
+# Step 1: Load your text
+# -----------------------------
 speech = """Even though you are only a very small speck of ocean...
 (put your full text here)
 """
 
-
-✅ This is your input text (e.g., a speech, article, or essay).
-
-🔹 Step 2: Convert to Document
+# -----------------------------
+# Step 2: Convert to Document
+# -----------------------------
 docs = [Document(page_content=speech)]
 
-
-✅ Wraps your raw text into a Document object — LangChain’s standard container.
-
-🔹 Step 3: Split into smaller chunks
+# -----------------------------
+# Step 3: Split into chunks
+# -----------------------------
 splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
 chunks = splitter.split_documents(docs)
 
-
-✅ Breaks the long text into chunks of ~500 characters, overlapping by 50 characters (so context flows naturally between chunks).
-
-🔹 Step 4: Create embeddings
+# -----------------------------
+# Step 4: Create embeddings
+# -----------------------------
 embedding = SentenceTransformerEmbeddings(model_name="all-MiniLM-L6-v2")
 
-
-✅ Loads a SentenceTransformer embedding model — converts text chunks into 384-dimensional semantic vectors.
-
-🔹 Step 5: Store chunks in a vector database
+# -----------------------------
+# Step 5: Store in vector DB
+# -----------------------------
 vectorstore = Chroma.from_documents(chunks, embedding)
 
-
-✅ Creates a Chroma database and indexes all the chunks with their embeddings.
-
-Now your speech is searchable by semantic meaning (not just keywords).
-
-🔹 Step 6: Create a retriever
+# -----------------------------
+# Step 6: Create retriever
+# -----------------------------
 retriever = vectorstore.as_retriever()
 
-
-✅ Turns the database into a retriever object — used to get the most relevant chunks given a user’s query.
-
-🔹 Step 7: Define the prompt
+# -----------------------------
+# Step 7: Define prompt template
+# -----------------------------
 prompt = ChatPromptTemplate.from_messages([
     ("system", "You are a helpful assistant. Answer based only on the context."),
     ("user", "Question: {question}\nContext: {context}")
 ])
 
+# -----------------------------
+# Step 8: Load Ollama model
+# -----------------------------
+model = ChatOllama(model="gpt-oss:120b-cloud")
 
-✅ Builds a prompt template with placeholders {question} and {context}.
-
-“system” message tells the LLM how to behave.
-
-“user” message feeds the question + context.
-
-🔹 Step 8: Load a local LLM
-model = ChatOllama(model="gpt-oss:120b-cloud")   # local LLM
-
-
-✅ Connects to Ollama and loads a specific model (e.g., gpt-oss:120b-cloud).
-This is the language model that will generate answers.
-
-🔹 Step 9: Set up the parser
+# -----------------------------
+# Step 9: Parser for output
+# -----------------------------
 parser = StrOutputParser()
 
-
-✅ Ensures that whatever the LLM returns is parsed into a plain text string.
-
-🔹 Step 10: Build a processing chain
+# -----------------------------
+# Step 10: Build the chain
+# -----------------------------
 chain = prompt | model | parser
 
-
-✅ Combines the 3 stages into a LangChain chain:
-
-Build the prompt →
-
-Send to LLM →
-
-Parse output.
-
-🔹 Step 11: Try a direct LLM call (no retrieval yet)
+# -----------------------------
+# Step 11: Direct LLM call (no retrieval)
+# -----------------------------
 question = "What are the key messages of the speech?"
-
 context = """Even though you are only a very small speck of ocean...
 (put full speech here)"""
 
 print(chain.invoke({"question": question, "context": context}))
 
-
-✅ Sends the question + full text directly to the LLM.
-→ This is a baseline: LLM answers directly without retrieval.
-
-🔹 Step 12: Use RAG (retrieval-augmented generation)
+# -----------------------------
+# Step 12: Retrieval (RAG) mode
+# -----------------------------
 query = "What are the key messages of the speech?"
 docs_context = retriever.get_relevant_documents(query)
 
-
-✅ Retrieves the most semantically relevant chunks from Chroma that match the question.
-
-🔹 Step 13: Build the context from retrieved chunks
+# Concatenate top chunks as context
 rag_context = "\n".join([d.page_content for d in docs_context])
 
-
-✅ Joins the top retrieved chunks into a single text block to feed to the model.
-
-🔹 Step 14: Ask again — this time with RAG context
+# Generate final answer
 print(chain.invoke({"question": query, "context": rag_context}))
 
 
-✅ Sends the same question, but now the context is dynamically chosen using retrieval → this is Retrieval-Augmented Generation.
